@@ -1,12 +1,3 @@
-"""
-El Niño 2026 Global Impact Forecast
-Machine Learning para previsão de impactos do fenômeno ENSO
-
-Dados: NOAA CPC, WMO, JMA, OTCA (Abril-Maio 2026)
-Tweet referência: @vinicios_betiol - "Super El Niño, pior em mais de 150 anos"
-Autor: Amauri Almeida · Pesquisa Ambiental
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -22,7 +13,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --- Modelos de Machine Learning ---
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -34,6 +25,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # --- FUNÇÃO DE CARREGAMENTO/CRIAÇÃO DOS DADOS ---
 @st.cache_data
@@ -47,6 +39,7 @@ def load_or_create_data():
     
     if os.path.exists(data_path):
         df = pd.read_csv(data_path)
+        df['date'] = pd.to_datetime(df['date'])
     else:
         # Gerar dados sintéticos baseados em registros históricos reais (1950-2025)
         np.random.seed(42)
@@ -96,6 +89,7 @@ def load_or_create_data():
         df.to_csv(data_path, index=False)
     
     return df
+
 
 # --- CLASSE DO MODELO DE MACHINE LEARNING ---
 class ENSOPredictor:
@@ -271,6 +265,7 @@ class ENSOPredictor:
         }
         return impacts
 
+
 # --- FUNÇÃO PARA GERAR MAPA GLOBAL DE IMPACTOS ---
 def create_global_impact_map(impacts_dict):
     """Cria mapa Folium com impactos regionais"""
@@ -316,6 +311,7 @@ def create_global_impact_map(impacts_dict):
         ).add_to(m)
     
     return m
+
 
 # --- MAIN APP ---
 def main():
@@ -368,9 +364,7 @@ def main():
     st.markdown("#### Machine Learning para previsão de impactos do fenômeno ENSO")
     
     # Alerta Super El Niño
-    st.markdown("""
-    > 🔴 **SUPER EL NIÑO WATCH** | Tweet referência: *"O super Super El Niño, o pior em mais de 150 anos, é mais um evento extremo que a nossa geração deve enfrentar nos próximos meses."* — @vinicios_betiol (18/05/2026)
-    """)
+    st.info("🔴 **SUPER EL NIÑO WATCH** | Tweet referência: *'O super Super El Niño, o pior em mais de 150 anos, é mais um evento extremo que a nossa geração deve enfrentar nos próximos meses.'* — @vinicios_betiol (18/05/2026)")
     
     st.markdown("---")
     
@@ -379,8 +373,8 @@ def main():
         st.markdown("""
         > *"Com base em dados históricos do índice Nino-3.4 (1950-2025) e nas condições atuais do Oceano Pacífico em Abril-Maio de 2026, um modelo de Machine Learning Random Forest é capaz de prever a intensidade do El Niño 2026 e seus impactos regionais com precisão estatisticamente significativa?"*
         
-        **Resposta:** Sim. O modelo Random Forest apresenta R² = **0.89** na validação e MAE = **0.23°C**, prevendo um pico de **1.5-1.8°C** para o Nino-3.4 entre Setembro e Novembro de 2026, caracterizando um evento **forte a muito forte**, com 25% de chance de atingir o limiar de Super El Niño (≥2.0°C), o que o tornaria comparável aos eventos históricos de 1982-83 e 1997-98.
-        """)
+        **Resposta:** Sim. O modelo Random Forest apresenta R² = **{:.3f}** na validação e MAE = **{:.2f}°C**, prevendo um pico de **1.5-1.8°C** para o Nino-3.4 entre Setembro e Novembro de 2026, caracterizando um evento **forte a muito forte**, com 25% de chance de atingir o limiar de Super El Niño (≥2.0°C), o que o tornaria comparável aos eventos históricos de 1982-83 e 1997-98.
+        """.format(model.metrics['r2'], model.metrics['mae']))
     
     st.markdown("---")
     
@@ -393,7 +387,8 @@ def main():
     with col3:
         st.metric("📐 RMSE", f"{model.metrics['rmse']:.2f}°C", help="Raiz do erro quadrático médio")
     with col4:
-        st.metric("🌡️ Nino-3.4 Atual", f"{df_historical['nino34'].iloc[-1]:.2f}°C", help="Condição atual do Pacífico equatorial")
+        current_nino = df_historical['nino34'].iloc[-1]
+        st.metric("🌡️ Nino-3.4 Atual", f"{current_nino:.2f}°C", help="Condição atual do Pacífico equatorial")
     
     st.markdown("---")
     
@@ -409,62 +404,67 @@ def main():
     last_date = df_historical['date'].iloc[-1]
     future_dates = pd.date_range(start=last_date + pd.Timedelta(days=30), periods=12, freq="ME")
     
-    # Dados históricos para o gráfico
+    # Dados históricos para o gráfico (últimos 60 meses = 5 anos)
     df_history_display = df_historical.tail(60).copy()
+    
+    # Pico previsto
+    peak_nino = max(future_predictions)
     
     # Criar gráfico combinado
     fig = make_subplots(rows=2, cols=1, 
                         subplot_titles=("🌡️ Índice Nino-3.4 (°C) - Histórico (últimos 5 anos) + Previsão ML",
                                        "📊 Impactos Regionais por Intensidade do El Niño"),
-                        vertical_spacing=0.15)
+                        vertical_spacing=0.15,
+                        row_heights=[0.6, 0.4])
     
     # Gráfico 1: Série temporal com previsão
     fig.add_trace(
         go.Scatter(x=df_history_display['date'], y=df_history_display['nino34'],
-                   mode='lines', name='Histórico', line=dict(color='blue', width=2)),
+                   mode='lines', name='Histórico (1950-2025)', line=dict(color='#1f77b4', width=2)),
         row=1, col=1
     )
     
     fig.add_trace(
         go.Scatter(x=future_dates, y=future_predictions,
                    mode='lines+markers', name='Previsão ML (Random Forest)',
-                   line=dict(color='red', width=3, dash='dash'),
-                   marker=dict(size=8, color='red')),
+                   line=dict(color='#d62728', width=3, dash='dash'),
+                   marker=dict(size=8, color='#d62728')),
         row=1, col=1
     )
     
     # Linhas de referência
-    fig.add_hline(y=0.5, line_dash="dash", line_color="orange", 
-                  annotation_text="El Niño Fraco", row=1, col=1)
-    fig.add_hline(y=1.0, line_dash="dash", line_color="orange", 
-                  annotation_text="El Niño Moderado", row=1, col=1)
-    fig.add_hline(y=1.5, line_dash="dash", line_color="red", 
-                  annotation_text="El Niño Forte", row=1, col=1)
-    fig.add_hline(y=2.0, line_dash="dot", line_color="darkred", 
-                  annotation_text="Super El Niño", row=1, col=1)
+    fig.add_hline(y=0.5, line_dash="dash", line_color="#ff7f0e", 
+                  annotation_text="El Niño Fraco", annotation_position="bottom right", row=1, col=1)
+    fig.add_hline(y=1.0, line_dash="dash", line_color="#ff7f0e", 
+                  annotation_text="El Niño Moderado", annotation_position="bottom right", row=1, col=1)
+    fig.add_hline(y=1.5, line_dash="dash", line_color="#d62728", 
+                  annotation_text="El Niño Forte", annotation_position="bottom right", row=1, col=1)
+    fig.add_hline(y=2.0, line_dash="dot", line_color="#8B0000", 
+                  annotation_text="Super El Niño", annotation_position="bottom right", row=1, col=1)
     
     # Gráfico 2: Impactos regionais para o pico previsto
-    peak_nino = max(future_predictions)
     impacts = model.predict_impacts(peak_nino)
     
+    # Criar DataFrame corretamente - CHAVE DA CORREÇÃO
     impact_df = pd.DataFrame(list(impacts.items()), columns=['Região', 'Intensidade (%)'])
-    impact_df = impact_df.sort_values('Intensidade', ascending=True)
+    impact_df = impact_df.sort_values('Intensidade (%)', ascending=True)
     
-    colors = ['darkred' if x > 70 else 'orange' if x > 40 else 'yellowgreen' for x in impact_df['Intensidade']]
+    colors = ['#8B0000' if x > 70 else '#d62728' if x > 40 else '#2ca02c' for x in impact_df['Intensidade (%)']]
     
     fig.add_trace(
-        go.Bar(x=impact_df['Intensidade'], y=impact_df['Região'],
+        go.Bar(x=impact_df['Intensidade (%)'], y=impact_df['Região'],
                orientation='h', marker_color=colors,
-               text=impact_df['Intensidade'].apply(lambda x: f'{x:.0f}%'),
+               text=impact_df['Intensidade (%)'].apply(lambda x: f'{x:.0f}%'),
                textposition='outside',
                name='Impacto Regional'),
         row=2, col=1
     )
     
-    fig.update_layout(height=800, showlegend=True, title_text=f"Pico previsto do Nino-3.4: {peak_nino:.2f}°C (Evento Forte)")
+    fig.update_layout(height=800, showlegend=True, title_text=f"📈 Pico previsto do Nino-3.4: {peak_nino:.2f}°C (Evento Forte a Muito Forte)")
     fig.update_xaxes(title_text="Data", row=1, col=1)
-    fig.update_yaxes(title_text="Nino-3.4 Anomalia (°C)", row=1, col=1)
+    fig.update_yaxes(title_text="Nino-3.4 Anomalia (°C)", row=1, col=1, range=[-2, 3])
     fig.update_xaxes(title_text="Intensidade do Impacto (%)", row=2, col=1)
+    fig.update_yaxes(title_text="Região", row=2, col=1)
     
     st.plotly_chart(fig, use_container_width=True)
     
@@ -484,14 +484,14 @@ def main():
     st.subheader("📊 Tabela de Impactos Regionais Detalhados")
     
     impact_table = pd.DataFrame([
-        {"Região": "Bacia Amazônica", "Impacto": "Seca severa", "Intensidade (%)": 78, "População Ameaçada": "~30M"},
-        {"Região": "Sul do Brasil / Uruguai", "Impacto": "Chuvas excessivas", "Intensidade (%)": 65, "População Ameaçada": "~25M"},
-        {"Região": "Corredor Seco (CA)", "Impacto": "Seca extrema", "Intensidade (%)": 85, "População Ameaçada": "~10M"},
-        {"Região": "Sudoeste dos EUA", "Impacto": "Seca / Incêndios", "Intensidade (%)": 72, "População Ameaçada": "~50M"},
-        {"Região": "Chifre da África", "Impacto": "Enchentes", "Intensidade (%)": 68, "População Ameaçada": "~15M"},
-        {"Região": "Austrália", "Impacto": "Seca / Queimadas", "Intensidade (%)": 82, "População Ameaçada": "~20M"},
-        {"Região": "Sudeste Asiático", "Impacto": "Seca", "Intensidade (%)": 55, "População Ameaçada": "~100M"},
-        {"Região": "Europa", "Impacto": "Ondas de calor", "Intensidade (%)": 42, "População Ameaçada": "~200M"},
+        {"Região": "Bacia Amazônica", "Impacto": "Seca severa", "Intensidade": f"{impacts.get('Amazon Basin - Drought', 50):.0f}%", "População Ameaçada": "~30M"},
+        {"Região": "Sul do Brasil / Uruguai", "Impacto": "Chuvas excessivas", "Intensidade": f"{impacts.get('Southern Brazil - Floods', 50):.0f}%", "População Ameaçada": "~25M"},
+        {"Região": "Corredor Seco (CA)", "Impacto": "Seca extrema", "Intensidade": f"{impacts.get('Dry Corridor - Drought', 50):.0f}%", "População Ameaçada": "~10M"},
+        {"Região": "Sudoeste dos EUA", "Impacto": "Seca / Incêndios", "Intensidade": f"{impacts.get('US Southwest - Drought/Wildfires', 50):.0f}%", "População Ameaçada": "~50M"},
+        {"Região": "Chifre da África", "Impacto": "Enchentes", "Intensidade": f"{impacts.get('Horn of Africa - Floods', 50):.0f}%", "População Ameaçada": "~15M"},
+        {"Região": "Austrália", "Impacto": "Seca / Queimadas", "Intensidade": f"{impacts.get('Australia - Drought/Bushfires', 50):.0f}%", "População Ameaçada": "~20M"},
+        {"Região": "Sudeste Asiático", "Impacto": "Seca", "Intensidade": f"{impacts.get('SE Asia - Drought', 50):.0f}%", "População Ameaçada": "~100M"},
+        {"Região": "Europa", "Impacto": "Ondas de calor", "Intensidade": f"{impacts.get('Europe - Winter Heatwave', 50):.0f}%", "População Ameaçada": "~200M"},
     ])
     
     st.dataframe(impact_table, use_container_width=True, hide_index=True)
@@ -503,13 +503,13 @@ def main():
     
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         #### 🔴 Descobertas Críticas
         
-        1. **Pico previsto de 1.5-1.8°C** para o Nino-3.4 entre Set-Nov/2026
+        1. **Pico previsto de {peak_nino:.2f}°C** para o Nino-3.4 entre Set-Nov/2026
         2. **25% de chance de Super El Niño** (≥2.0°C) — comparável a 1982-83 e 1997-98
-        3. **Amazônia em alerta máximo** para seca e queimadas (78% de intensidade)
-        4. **Corredor Seco da América Central** com 85% de impacto — crise hídrica iminente
+        3. **Amazônia em alerta máximo** para seca e queimadas ({impacts.get('Amazon Basin - Drought', 50):.0f}% de intensidade)
+        4. **Corredor Seco da América Central** com {impacts.get('Dry Corridor - Drought', 50):.0f}% de impacto — crise hídrica iminente
         5. **Austrália e Sudeste Asiático** com alto risco de seca e incêndios
         """)
     
@@ -539,6 +539,7 @@ def main():
         "<p style='text-align: center;'>🌊 <strong>El Niño 2026 ML Forecast</strong> · Pesquisa Ambiental · Amauri Almeida · © 2026</p>",
         unsafe_allow_html=True
     )
+
 
 if __name__ == "__main__":
     main()
